@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'https://order-taking-app-production.up.railway.app/api';
 
 function getHeaders() {
   const token = localStorage.getItem('token');
@@ -148,7 +148,7 @@ export function connectWebSocket(onEvent: (event: string, data: any) => void): (
   const token = localStorage.getItem('token');
   if (!token) return () => {};
 
-  const ws = new WebSocket(`ws://localhost:3000?token=${token}`);
+  const ws = new WebSocket(`wss://order-taking-app-production.up.railway.app?token=${token}`);
 
   ws.onopen = () => {
     console.log('Admin WebSocket connected');
