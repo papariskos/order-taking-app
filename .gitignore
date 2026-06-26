@@ -1,0 +1,29 @@
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Backend ignores
+backend/node_modules/
+backend/dist/
+backend/.env
+
+# Admin Panel ignores
+admin-panel/node_modules/
+admin-panel/dist/
+admin-panel/.env.local
+admin-panel/.env.development.local
+admin-panel/.env.test.local
+admin-panel/.env.production.local
+
+# Android Waiter App ignores
+waiter-app/.gradle/
+waiter-app/local.properties
+waiter-app/app/build/
+waiter-app/build/
+waiter-app/.idea/
+waiter-app/*.iml
+waiter-app/.cxx/
+waiter-app/capture.png
+*.hprof
+waiter-app/*.hprof
