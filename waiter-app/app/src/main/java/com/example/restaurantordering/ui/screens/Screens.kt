@@ -54,7 +54,7 @@ fun LoginScreen(
     val authState by authViewModel.authState.collectAsState()
     var username by remember { mutableStateOf("waiter1") }
     var password by remember { mutableStateOf("waiterpassword") }
-    var serverIp by remember { mutableStateOf("10.0.2.2:3000") }
+    var serverIp by remember { mutableStateOf("order-taking-app-production.up.railway.app") }
     val context = LocalContext.current
 
     LaunchedEffect(authState) {

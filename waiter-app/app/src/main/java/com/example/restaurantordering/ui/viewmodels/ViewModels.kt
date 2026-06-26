@@ -30,7 +30,7 @@ class AuthViewModel(
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    fun login(username: String, password: String, serverIp: String = "10.0.2.2:3000") {
+    fun login(username: String, password: String, serverIp: String = "order-taking-app-production.up.railway.app") {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
