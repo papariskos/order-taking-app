@@ -14,6 +14,7 @@ interface UserRepository {
     fun getToken(): String?
     fun getCurrentUser(): User?
     fun logout()
+    fun updateServerIp(serverIp: String)
 }
 
 interface ProductRepository {
@@ -33,7 +34,10 @@ interface OrderRepository {
 
 // --- Repository Implementations ---
 
-class UserRepositoryImpl(private val apiService: ApiService) : UserRepository {
+class UserRepositoryImpl(
+    private val apiService: ApiService,
+    private val dynamicHostInterceptor: com.example.restaurantordering.data.network.DynamicHostInterceptor
+) : UserRepository {
     private var token: String? = null
     private var currentUser: User? = null
 
@@ -55,6 +59,10 @@ class UserRepositoryImpl(private val apiService: ApiService) : UserRepository {
     override fun logout() {
         token = null
         currentUser = null
+    }
+
+    override fun updateServerIp(serverIp: String) {
+        dynamicHostInterceptor.host = serverIp
     }
 }
 
@@ -99,19 +107,30 @@ class OrderRepositoryImpl(
 ) : OrderRepository {
 
     override fun getActiveOrders(): Flow<List<Order>> {
-        return orderDao.getActiveOrdersFlow().map { list ->
-            list.map { 
+        return orderDao.getActiveOrdersWithItemsFlow().map { list ->
+            list.map { item ->
                 Order(
-                    id = it.id,
-                    tableId = it.tableId,
-                    zone = it.zone,
-                    status = it.status,
-                    waiterId = it.waiterId,
-                    waiterName = it.waiterName,
-                    totalPrice = it.totalPrice,
-                    paymentMethod = it.paymentMethod,
-                    notes = it.notes,
-                    createdAt = it.createdAt
+                    id = item.order.id,
+                    tableId = item.order.tableId,
+                    zone = item.order.zone,
+                    status = item.order.status,
+                    waiterId = item.order.waiterId,
+                    waiterName = item.order.waiterName,
+                    totalPrice = item.order.totalPrice,
+                    paymentMethod = item.order.paymentMethod,
+                    notes = item.order.notes,
+                    createdAt = item.order.createdAt,
+                    items = item.items.map { ordItem ->
+                        OrderItem(
+                            id = ordItem.id,
+                            orderId = ordItem.orderId,
+                            productId = ordItem.productId,
+                            productName = ordItem.productName,
+                            quantity = ordItem.quantity,
+                            price = ordItem.price,
+                            notes = ordItem.notes
+                        )
+                    }
                 )
             }
         }
@@ -122,7 +141,8 @@ class OrderRepositoryImpl(
         val apiOrders = apiService.getActiveOrders(authToken)
         
         orderDao.clearAll()
-        orderDao.insertOrders(apiOrders.map { 
+        
+        val cachedOrders = apiOrders.map {
             CachedOrder(
                 id = it.id,
                 tableId = it.tableId,
@@ -135,7 +155,23 @@ class OrderRepositoryImpl(
                 notes = it.notes,
                 createdAt = it.createdAt
             )
-        })
+        }
+        
+        val cachedItems = apiOrders.flatMap { order ->
+            order.items.map { item ->
+                CachedOrderItem(
+                    id = item.id,
+                    orderId = item.orderId,
+                    productId = item.productId,
+                    productName = item.productName,
+                    quantity = item.quantity,
+                    price = item.price,
+                    notes = item.notes
+                )
+            }
+        }
+        
+        orderDao.insertOrdersWithItems(cachedOrders, cachedItems)
     }
 
     override suspend fun submitOrder(

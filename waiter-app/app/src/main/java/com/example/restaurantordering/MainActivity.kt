@@ -18,6 +18,8 @@ import com.example.restaurantordering.ui.viewmodels.AuthViewModel
 import com.example.restaurantordering.ui.viewmodels.OrderViewModel
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import okhttp3.OkHttpClient
+import com.example.restaurantordering.data.network.DynamicHostInterceptor
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,10 +31,16 @@ class MainActivity : ComponentActivity() {
         val productDao = database.productDao()
         val orderDao = database.orderDao()
 
-        // Setup Retrofit Client
-        // Note: 10.0.2.2 is the special IP in the Android emulator to access the host's localhost (3000)
+        // Setup Dynamic Host Interceptor & OkHttpClient
+        val dynamicHostInterceptor = DynamicHostInterceptor()
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(dynamicHostInterceptor)
+            .build()
+
+        // Setup Retrofit Client using okHttpClient
         val retrofit = Retrofit.Builder()
             .baseUrl("http://10.0.2.2:3000/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         val apiService = retrofit.create(ApiService::class.java)
@@ -41,7 +49,7 @@ class MainActivity : ComponentActivity() {
         val wsService = WebSocketService()
 
         // Setup Repositories
-        val userRepo = UserRepositoryImpl(apiService)
+        val userRepo = UserRepositoryImpl(apiService, dynamicHostInterceptor)
         val productRepo = ProductRepositoryImpl(apiService, categoryDao, productDao, userRepo)
         val orderRepo = OrderRepositoryImpl(apiService, orderDao, userRepo)
 
@@ -79,6 +87,10 @@ class MainActivity : ComponentActivity() {
                             },
                             onTableSelected = {
                                 navController.navigate("ordering")
+                            },
+                            onEditOrder = { order ->
+                                orderViewModel.loadOrderItemsForEdit(order)
+                                navController.navigate("ordering")
                             }
                         )
                     }
@@ -89,8 +101,25 @@ class MainActivity : ComponentActivity() {
                             onBack = {
                                 navController.popBackStack()
                             },
+                            onGoToCart = {
+                                navController.navigate("cart")
+                            }
+                        )
+                    }
+
+                    composable("cart") {
+                        CartScreen(
+                            orderViewModel = orderViewModel,
+                            onBack = {
+                                navController.popBackStack()
+                            },
                             onCheckout = {
                                 navController.navigate("checkout")
+                            },
+                            onSubmitSuccess = {
+                                navController.navigate("area_selection") {
+                                    popUpTo("area_selection") { inclusive = false }
+                                }
                             }
                         )
                     }

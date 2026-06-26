@@ -22,8 +22,15 @@ class WebSocketService {
     fun connect(token: String, serverIp: String = "10.0.2.2:3000") {
         disconnect()
 
+        val isLocal = serverIp.contains("localhost") || 
+                       serverIp.contains("10.0.2.2") || 
+                       serverIp.contains("192.168.") ||
+                       serverIp.contains("172.16.") ||
+                       serverIp.contains("10.")
+        val scheme = if (isLocal) "ws" else "wss"
+
         val request = Request.Builder()
-            .url("ws://$serverIp?token=$token")
+            .url("$scheme://$serverIp?token=$token")
             .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {

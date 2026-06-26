@@ -36,6 +36,37 @@ data class CachedOrder(
     val createdAt: String
 )
 
+@Entity(
+    tableName = "cached_order_items",
+    foreignKeys = [
+        ForeignKey(
+            entity = CachedOrder::class,
+            parentColumns = ["id"],
+            childColumns = ["orderId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("orderId")]
+)
+data class CachedOrderItem(
+    @PrimaryKey val id: Int,
+    val orderId: Int,
+    val productId: Int,
+    val productName: String?,
+    val quantity: Int,
+    val price: Double,
+    val notes: String?
+)
+
+data class CachedOrderWithItems(
+    @Embedded val order: CachedOrder,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "orderId"
+    )
+    val items: List<CachedOrderItem>
+)
+
 // --- Room DAOs ---
 
 @Dao
@@ -64,24 +95,46 @@ interface CategoryDao {
 
 @Dao
 interface OrderDao {
+    @Transaction
     @Query("SELECT * FROM cached_orders WHERE status = 'active' ORDER BY createdAt DESC")
-    fun getActiveOrdersFlow(): Flow<List<CachedOrder>>
+    fun getActiveOrdersWithItemsFlow(): Flow<List<CachedOrderWithItems>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrders(orders: List<CachedOrder>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrderItems(items: List<CachedOrderItem>)
+
+    @Query("DELETE FROM cached_order_items WHERE orderId = :orderId")
+    suspend fun deleteOrderItems(orderId: Int)
+
+    @Transaction
+    suspend fun insertOrdersWithItems(orders: List<CachedOrder>, items: List<CachedOrderItem>) {
+        insertOrders(orders)
+        insertOrderItems(items)
+    }
+
     @Query("DELETE FROM cached_orders WHERE id = :id")
     suspend fun deleteOrder(id: Int)
 
+    @Query("DELETE FROM cached_order_items")
+    suspend fun clearAllOrderItems()
+
     @Query("DELETE FROM cached_orders")
-    suspend fun clearAll()
+    suspend fun clearAllOrders()
+
+    @Transaction
+    suspend fun clearAll() {
+        clearAllOrderItems()
+        clearAllOrders()
+    }
 }
 
 // --- Database Class ---
 
 @Database(
-    entities = [CachedCategory::class, CachedProduct::class, CachedOrder::class],
-    version = 1,
+    entities = [CachedCategory::class, CachedProduct::class, CachedOrder::class, CachedOrderItem::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -99,7 +152,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "restaurant_local.db"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }

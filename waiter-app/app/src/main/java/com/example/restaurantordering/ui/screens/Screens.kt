@@ -29,8 +29,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.restaurantordering.data.model.CartItem
-import com.example.restaurantordering.data.model.Product
+import androidx.compose.foundation.BorderStroke
+import com.example.restaurantordering.data.model.*
 import com.example.restaurantordering.ui.viewmodels.AuthState
 import com.example.restaurantordering.ui.viewmodels.AuthViewModel
 import com.example.restaurantordering.ui.viewmodels.OrderViewModel
@@ -192,23 +192,25 @@ fun AreaSelectionScreen(
     orderViewModel: OrderViewModel,
     authViewModel: AuthViewModel,
     onLogout: () -> Unit,
-    onTableSelected: () -> Unit
+    onTableSelected: () -> Unit,
+    onEditOrder: (Order) -> Unit
 ) {
     val activeOrders by orderViewModel.activeOrders.collectAsState()
     val zones = listOf("Σάλα", "Μπαλκόνι", "1ος Όροφος", "Πισίνα")
     var selectedZoneIdx by remember { mutableStateOf(0) }
+    var selectedTabIdx by remember { mutableStateOf(0) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("RestoWaiter - Επιλογή Τραπεζιού", color = TextPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text("RestoWaiter", color = TextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SecondaryDark),
                 actions = {
                     IconButton(onClick = { 
                         authViewModel.logout()
                         onLogout()
                     }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.Red)
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = TableRed)
                     }
                 }
             )
@@ -220,74 +222,252 @@ fun AreaSelectionScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Horizontal scrollable Tabs for Zones
+            // Main tabs: "Τραπέζια" and "Ενεργές Παραγγελίες"
             TabRow(
-                selectedTabIndex = selectedZoneIdx,
+                selectedTabIndex = selectedTabIdx,
                 containerColor = SecondaryDark,
                 contentColor = AccentCyan,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                zones.forEachIndexed { idx, zone ->
-                    Tab(
-                        selected = selectedZoneIdx == idx,
-                        onClick = { selectedZoneIdx = idx },
-                        text = { Text(zone, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
-                    )
-                }
+                Tab(
+                    selected = selectedTabIdx == 0,
+                    onClick = { selectedTabIdx = 0 },
+                    text = { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Τραπέζια", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTabIdx == 1,
+                    onClick = { selectedTabIdx = 1 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Ενεργές (${activeOrders.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Grid of tables for selected zone (1 to 15)
-            val currentZone = zones[selectedZoneIdx]
-            
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(15) { index ->
-                    val tableId = "${currentZone[0]}${index + 1}" // e.g. Σ1, Μ5, 1, Π8
-                    val hasActiveOrder = activeOrders.any { it.tableId == tableId && it.zone == currentZone }
-                    val tableColor = if (hasActiveOrder) TableRed else TableGreen
+            if (selectedTabIdx == 0) {
+                // Table View
+                TabRow(
+                    selectedTabIndex = selectedZoneIdx,
+                    containerColor = PrimaryDark,
+                    contentColor = AccentCyan,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    zones.forEachIndexed { idx, zone ->
+                        Tab(
+                            selected = selectedZoneIdx == idx,
+                            onClick = { selectedZoneIdx = idx },
+                            text = { Text(zone, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                        )
+                    }
+                }
 
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SecondaryDark)
-                            .border(2.dp, tableColor, RoundedCornerShape(16.dp))
-                            .clickable {
-                                orderViewModel.selectTable(currentZone, tableId)
-                                onTableSelected()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val currentZone = zones[selectedZoneIdx]
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(15) { index ->
+                        val tableId = "${currentZone[0]}${index + 1}" // e.g. Σ1, Μ5, 1, Π8
+                        val tableOrder = activeOrders.find { it.tableId == tableId && it.zone == currentZone }
+                        val hasActiveOrder = tableOrder != null
+                        val tableColor = if (hasActiveOrder) TableRed else TableGreen
+
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(SecondaryDark)
+                                .border(
+                                    width = if (hasActiveOrder) 2.dp else 1.dp,
+                                    color = tableColor,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable {
+                                    orderViewModel.selectTable(currentZone, tableId)
+                                    onTableSelected()
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "Τραπέζι",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = tableId,
-                                color = TextPrimary,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (hasActiveOrder) "Κατειλημμένο" else "Ελεύθερο",
-                                color = tableColor,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                Text(
+                                    text = "Τραπέζι",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = tableId,
+                                    color = TextPrimary,
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (hasActiveOrder && tableOrder != null) {
+                                    Text(
+                                        text = "${String.format("%.2f", tableOrder.totalPrice)} €",
+                                        color = TableRed,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Ελεύθερο",
+                                        color = TableGreen,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Active Orders List View
+                if (activeOrders.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Δεν υπάρχουν ενεργές παραγγελίες", color = TextSecondary, fontSize = 16.sp)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(activeOrders) { order ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "Τραπέζι ${order.tableId} (${order.zone})",
+                                                color = TextPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 18.sp
+                                            )
+                                            Text(
+                                                text = "Σερβιτόρος: ${order.waiterName ?: "User"}",
+                                                color = TextSecondary,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                        Text(
+                                            text = "${String.format("%.2f", order.totalPrice)} €",
+                                            color = AccentCyan,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 20.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Divider(color = Color(0xFF1E293B), thickness = 1.dp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "Προϊόντα:",
+                                        color = TextSecondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    order.items.forEach { item ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "• ${item.productName ?: "Προϊόν"} x${item.quantity}",
+                                                color = TextPrimary,
+                                                fontSize = 13.sp
+                                            )
+                                            if (!item.notes.isNullOrEmpty()) {
+                                                Text(
+                                                    text = "(${item.notes})",
+                                                    color = AccentCyan,
+                                                    fontSize = 11.sp,
+                                                    modifier = Modifier.padding(start = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (!order.notes.isNullOrEmpty()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Σημείωση: ${order.notes}",
+                                            color = TextSecondary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { onEditOrder(order) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Επεξεργασία", color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                orderViewModel.selectTable(order.zone, order.tableId)
+                                                onTableSelected()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Πληρωμή", color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -301,32 +481,27 @@ fun AreaSelectionScreen(
 fun OrderScreen(
     orderViewModel: OrderViewModel,
     onBack: () -> Unit,
-    onCheckout: () -> Unit
+    onGoToCart: () -> Unit
 ) {
     val products by orderViewModel.products.collectAsState()
     val categories by orderViewModel.categories.collectAsState()
     
     var selectedCatId by remember { mutableStateOf<Int?>(null) }
     val cartItems = orderViewModel.cartItems
-    val context = LocalContext.current
+    val totalItems = cartItems.sumOf { it.quantity }
 
-    // Set first category selected by default when loaded
     LaunchedEffect(categories) {
         if (categories.isNotEmpty() && selectedCatId == null) {
             selectedCatId = categories[0].id
         }
     }
 
-    // Modal dialog state for adding item note
-    var noteItemToEdit by remember { mutableStateOf<CartItem?>(null) }
-    var itemNoteText by remember { mutableStateOf("") }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
                     Text(
-                        text = "Παραγγελία: ${orderViewModel.selectedTable.value} (${orderViewModel.selectedZone.value})",
+                        text = "Τραπέζι: ${orderViewModel.selectedTable.value} (${orderViewModel.selectedZone.value})",
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold
                     ) 
@@ -338,13 +513,179 @@ fun OrderScreen(
                 },
                 actions = {
                     if (orderViewModel.editingOrderId.value != null) {
-                        Button(
-                            onClick = onCheckout,
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                            modifier = Modifier.padding(end = 8.dp)
+                        Text(
+                            text = "Επεξεργασία",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SecondaryDark)
+            )
+        },
+        floatingActionButton = {
+            BadgedBox(
+                badge = {
+                    if (totalItems > 0) {
+                        Badge(
+                            containerColor = TableRed,
+                            contentColor = Color.White
                         ) {
-                            Text("Πληρωμή / Ακύρωση", color = Color.White)
+                            Text(totalItems.toString(), fontWeight = FontWeight.Bold)
                         }
+                    }
+                },
+                modifier = Modifier.padding(16.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = onGoToCart,
+                    containerColor = AccentCyan,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = "Cart",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        },
+        containerColor = PrimaryDark
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(12.dp)
+        ) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories) { cat ->
+                    FilterChip(
+                        selected = selectedCatId == cat.id,
+                        onClick = { selectedCatId = cat.id },
+                        label = { Text(cat.name, color = TextPrimary, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentCyan,
+                            containerColor = SecondaryDark
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            borderColor = if (selectedCatId == cat.id) AccentCyan else Color(0xFF334155)
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val filteredProducts = products.filter { it.categoryId == selectedCatId && it.available }
+            
+            if (filteredProducts.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Δεν υπάρχουν διαθέσιμα προϊόντα σε αυτή την κατηγορία.", color = TextSecondary)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filteredProducts.size) { index ->
+                        val prod = filteredProducts[index]
+                        val qtyInCart = cartItems.find { it.product.id == prod.id }?.quantity ?: 0
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { orderViewModel.addToCart(prod) },
+                            colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(
+                                width = if (qtyInCart > 0) 2.dp else 1.dp,
+                                color = if (qtyInCart > 0) AccentCyan else Color(0xFF1E293B)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = prod.name,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    maxLines = 2
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${String.format("%.2f", prod.price)} €",
+                                        color = AccentCyan,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 18.sp
+                                    )
+                                    if (qtyInCart > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .background(AccentCyan, RoundedCornerShape(12.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = qtyInCart.toString(),
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CartScreen(
+    orderViewModel: OrderViewModel,
+    onBack: () -> Unit,
+    onCheckout: () -> Unit,
+    onSubmitSuccess: () -> Unit
+) {
+    val cartItems = orderViewModel.cartItems
+    val context = LocalContext.current
+    val isEditing = orderViewModel.editingOrderId.value != null
+
+    var noteItemToEdit by remember { mutableStateOf<CartItem?>(null) }
+    var itemNoteText by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        text = "Καλάθι: Τραπέζι ${orderViewModel.selectedTable.value}",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    ) 
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SecondaryDark)
@@ -352,127 +693,85 @@ fun OrderScreen(
         },
         containerColor = PrimaryDark
     ) { paddingValues ->
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(16.dp)
         ) {
-            // Left Side: Menu Selection
-            Column(
-                modifier = Modifier
-                    .weight(1.3f)
-                    .fillMaxHeight()
-                    .padding(12.dp)
-            ) {
-                // Category Tabs (Horizontal Scroll)
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Text(
+                text = "Προϊόντα στο Καλάθι",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            if (cartItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(categories) { cat ->
-                        FilterChip(
-                            selected = selectedCatId == cat.id,
-                            onClick = { selectedCatId = cat.id },
-                            label = { Text(cat.name, color = TextPrimary) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentCyan,
-                                containerColor = SecondaryDark
-                            )
-                        )
-                    }
+                    Text("Το καλάθι είναι άδειο", color = TextSecondary, fontSize = 16.sp)
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Products list
-                val filteredProducts = products.filter { it.categoryId == selectedCatId && it.available }
-                
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(filteredProducts.size) { index ->
-                        val prod = filteredProducts[index]
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { orderViewModel.addToCart(prod) },
-                            colors = CardDefaults.cardColors(containerColor = SecondaryDark),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                Text(prod.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "${prod.price} €",
-                                    color = AccentCyan,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Right Side: Cart Summary
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(SecondaryDark)
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = "Καλάθι Παραγγελίας",
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
+            } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(cartItems) { item ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = PrimaryDark),
-                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFF1E293B)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(item.product.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                         Text(
-                                            text = "${item.product.price * item.quantity} €",
+                                            text = item.product.name,
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                        Text(
+                                            text = "${String.format("%.2f", item.product.price)} € ανά τμχ.",
                                             color = TextSecondary,
-                                            fontSize = 11.sp
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(top = 2.dp)
                                         )
                                     }
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         IconButton(
                                             onClick = { orderViewModel.decrementCartItem(item) },
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(Color(0xFF1E293B), RoundedCornerShape(8.dp))
                                         ) {
-                                            Text("—", color = Color.Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                            Text("—", color = TableRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                         }
-                                        Text(item.quantity.toString(), color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(
+                                            text = item.quantity.toString(),
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            modifier = Modifier.padding(horizontal = 4.dp)
+                                        )
                                         IconButton(
                                             onClick = { orderViewModel.incrementCartItem(item) },
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(Color(0xFF1E293B), RoundedCornerShape(8.dp))
                                         ) {
                                             Icon(Icons.Default.Add, contentDescription = "Inc", tint = TableGreen, modifier = Modifier.size(16.dp))
                                         }
@@ -486,20 +785,20 @@ fun OrderScreen(
                                             noteItemToEdit = item
                                             itemNoteText = item.notes
                                         }
-                                        .padding(top = 6.dp),
+                                        .padding(top = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Edit,
                                         contentDescription = "Edit Note",
                                         tint = if (item.notes.isEmpty()) TextSecondary else AccentCyan,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (item.notes.isEmpty()) "Προσθήκη σημείωσης..." else item.notes,
                                         color = if (item.notes.isEmpty()) TextSecondary else AccentCyan,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         maxLines = 1
                                     )
                                 }
@@ -507,43 +806,56 @@ fun OrderScreen(
                         }
                     }
                 }
+            }
 
-                // General Notes Field
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = orderViewModel.cartNotes.value,
-                    onValueChange = { orderViewModel.cartNotes.value = it },
-                    label = { Text("Γενικές Σημειώσεις", color = TextSecondary, fontSize = 11.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = Color(0xFF334155)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = orderViewModel.cartNotes.value,
+                onValueChange = { orderViewModel.cartNotes.value = it },
+                label = { Text("Γενικές Σημειώσεις Παραγγελίας", color = TextSecondary) },
+                singleLine = false,
+                maxLines = 2,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    focusedBorderColor = AccentCyan,
+                    unfocusedBorderColor = Color(0xFF1E293B)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            val cartTotal = cartItems.sumOf { it.product.price * it.quantity }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Divider(color = Color(0xFF1E293B), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Συνολικό Ποσό:", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    text = "${String.format("%.2f", cartTotal)} €",
+                    color = AccentCyan,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 24.sp
                 )
+            }
 
-                // Total & Submit
-                val cartTotal = cartItems.sumOf { it.product.price * it.quantity }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Σύνολο:", color = TextSecondary, fontWeight = FontWeight.Bold)
-                    Text("${cartTotal} €", color = AccentCyan, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                }
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Button(
                     onClick = {
                         orderViewModel.submitCurrentOrder(
                             onSuccess = {
-                                Toast.makeText(context, "Η παραγγελία εστάλη!", Toast.LENGTH_SHORT).show()
-                                onBack()
+                                Toast.makeText(context, "Η παραγγελία υποβλήθηκε επιτυχώς!", Toast.LENGTH_SHORT).show()
+                                onSubmitSuccess()
                             },
                             onError = {
                                 Toast.makeText(context, "Σφάλμα: $it", Toast.LENGTH_LONG).show()
@@ -551,55 +863,90 @@ fun OrderScreen(
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     enabled = cartItems.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
                 ) {
                     Text(
-                        text = if (orderViewModel.editingOrderId.value != null) "Ενημέρωση Παραγγελίας" else "Αποστολή Παραγγελίας",
+                        text = if (isEditing) "Ενημέρωση Παραγγελίας" else "Υποβολή Παραγγελίας",
                         color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
+                }
+
+                if (isEditing) {
+                    Button(
+                        onClick = onCheckout,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    ) {
+                        Icon(Icons.Default.ShoppingCart, contentDescription = "Checkout", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Πληρωμή / Ακύρωση",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Dialogue for editing item-specific notes
     if (noteItemToEdit != null) {
         Dialog(onDismissRequest = { noteItemToEdit = null }) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SecondaryDark),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
                 modifier = Modifier.padding(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Σημείωση για: ${noteItemToEdit!!.product.name}", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "Σημείωση για: ${noteItemToEdit!!.product.name}",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = itemNoteText,
                         onValueChange = { itemNoteText = it },
-                        placeholder = { Text("π.χ. χωρίς κρεμμύδι, παγάκια...") },
+                        placeholder = { Text("π.χ. χωρίς κρεμμύδι, παγάκια...", color = TextSecondary) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
-                            focusedBorderColor = AccentCyan
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = Color(0xFF1E293B)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         TextButton(onClick = { noteItemToEdit = null }) {
                             Text("Ακύρωση", color = TextSecondary)
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
                                 orderViewModel.updateItemNotes(noteItemToEdit!!, itemNoteText)
                                 noteItemToEdit = null
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Αποθήκευση", color = Color.White)
+                            Text("Αποθήκευση", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -616,14 +963,11 @@ fun BillScreen(
     onSuccess: () -> Unit
 ) {
     val activeOrders by orderViewModel.activeOrders.collectAsState()
-    val products by orderViewModel.products.collectAsState()
     val tableId = orderViewModel.selectedTable.value
     val zone = orderViewModel.selectedZone.value
     val context = LocalContext.current
 
     val currentOrder = activeOrders.find { it.tableId == tableId && it.zone == zone }
-
-    // Dialog state for cancellation reason
     var cancelDialogOpen by remember { mutableStateOf(false) }
     var cancelReason by remember { mutableStateOf("") }
 
@@ -654,7 +998,6 @@ fun BillScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // Simulated Thermal Bill Receipt Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(4.dp),
@@ -695,10 +1038,6 @@ fun BillScreen(
 
                     Divider(color = Color.DarkGray, thickness = 1.dp)
 
-                    // Render items
-                    // In real app, items are part of order details loaded into viewmodel.
-                    // For the UI display, we retrieve quantities from orderViewModel.cartItems
-                    // or simulated items.
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -715,7 +1054,7 @@ fun BillScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    text = "${item.product.price * item.quantity} €",
+                                    text = "${String.format("%.2f", item.product.price * item.quantity)} €",
                                     color = Color.Black,
                                     fontSize = 14.sp
                                 )
@@ -730,12 +1069,11 @@ fun BillScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("ΣΥΝΟΛΟ:", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("${currentOrder.totalPrice} €", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("${String.format("%.2f", currentOrder.totalPrice)} €", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 }
             }
 
-            // Checkout Buttons Panel
             Card(
                 colors = CardDefaults.cardColors(containerColor = SecondaryDark),
                 shape = RoundedCornerShape(16.dp),
@@ -769,6 +1107,7 @@ fun BillScreen(
                                 )
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = TableGreen),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
@@ -790,6 +1129,7 @@ fun BillScreen(
                                 )
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
@@ -805,6 +1145,7 @@ fun BillScreen(
                     Button(
                         onClick = { cancelDialogOpen = true },
                         colors = ButtonDefaults.buttonColors(containerColor = TableRed),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
@@ -818,7 +1159,6 @@ fun BillScreen(
         }
     }
 
-    // Cancellation Reason Dialog
     if (cancelDialogOpen) {
         Dialog(onDismissRequest = { cancelDialogOpen = false }) {
             Card(

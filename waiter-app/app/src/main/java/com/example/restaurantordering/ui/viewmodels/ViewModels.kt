@@ -34,6 +34,7 @@ class AuthViewModel(
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
+                userRepo.updateServerIp(serverIp)
                 val user = userRepo.login(username, password)
                 userRepo.setToken(user.token)
                 
@@ -126,10 +127,13 @@ class OrderViewModel(
             editingOrderId.value = existingOrder.id
             cartNotes.value = existingOrder.notes ?: ""
             
-            // Fetch items from database (Since cached Order doesn't hold items, we might rely on online load.
-            // But we can fetch active orders details from backend or let the ViewModel load them).
-            // To be simple and robust, we can implement local detail load or simply request.
-            // Let's assume detail loads automatically or we trigger refresh.
+            // Load existing items into cart automatically!
+            existingOrder.items.forEach { item ->
+                val prod = _products.value.find { it.id == item.productId }
+                if (prod != null) {
+                    cartItems.add(CartItem(prod, item.quantity, item.notes ?: ""))
+                }
+            }
         }
     }
 
